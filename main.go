@@ -15,60 +15,42 @@ import (
 	"github.com/llgcode/draw2d/draw2dimg"
 )
 
+const stepLength = 20
+
 func main() {
 	// Initialize the graphic context on an RGBA image
 	rect := image.Rect(0, 0, 850, 850)
 	dest := image.NewRGBA(rect)
-	gc := draw2dimg.NewGraphicContext(dest)
-
-	// Set some properties
-	gc.SetFillColor(color.RGBA{0x44, 0xff, 0x44, 0xff})
-	gc.SetStrokeColor(color.RGBA{0x44, 0x44, 0x44, 0xff})
-	gc.SetLineWidth(5)
-
 	walk := NewRandomWalk(2)
-	start := translateCoords(walk.position(), rect).coords
-	// gc.MoveTo(float64(start[0]), float64(start[1]))
-	// for i := 0; i < 2000; i++ {
-	// 	p := walk.step()
-	// 	fmt.Printf("walk is now at (%d, %d)\n", p.coords[0], p.coords[1])
-
-	// 	p.coords[0] *= 10
-	// 	p.coords[1] *= 10
-
-	// 	ip := translateCoords(p, rect)
-	// 	fmt.Printf("drawing at (%d, %d)\n", ip.coords[0], ip.coords[1])
-	// 	gc.LineTo(float64(ip.coords[0]), float64(ip.coords[1]))
-	// 	gc.FillStroke()
-	// 	gc.MoveTo(float64(ip.coords[0]), float64(ip.coords[1]))
-	// }
-	// gc.Close()
-
-	// Save to file
-	// draw2dimg.SaveToPngFile("randomwalk.png", dest)
 
 	http.HandleFunc("/step", func(w http.ResponseWriter, r *http.Request) {
 		gc := draw2dimg.NewGraphicContext(dest)
+
+		// Get number of steps to take if specified
+		numSteps := int64(1)
+		if val := r.URL.Query().Get("count"); len(val) != 0 {
+			if count, err := strconv.ParseInt(val, 10, 64); err != nil {
+				http.Error(w, fmt.Sprintf(`malformed count %s`, val), 400)
+				return
+			} else {
+				numSteps = count
+			}
+		}
 
 		// Set some properties
 		gc.SetFillColor(color.RGBA{0x44, 0xff, 0x44, 0xff})
 		gc.SetStrokeColor(color.RGBA{0x44, 0x44, 0x44, 0xff})
 		gc.SetLineWidth(5)
 
-		gc.MoveTo(float64(start[0]), float64(start[1]))
+		start := copyPoint(walk.position())
+		start = translateCoords(start, rect)
+		gc.MoveTo(float64(start.coords[0]), float64(start.coords[1]))
 
-		p := walk.step()
-
-		for i := 0; i < len(walk.walk); i++ {
-
-			fmt.Printf("walk is now at (%d, %d)\n", p.coords[0], p.coords[1])
-
-			pos := copyPoint(walk.walk[i])
-			pos.coords[0] *= 50
-			pos.coords[1] *= 50
+		for i := int64(0); i < numSteps; i++ {
+			p := walk.step()
+			pos := copyPoint(p)
 
 			ip := translateCoords(pos, rect)
-			fmt.Printf("drawing at (%d, %d)\n", ip.coords[0], ip.coords[1])
 			gc.LineTo(float64(ip.coords[0]), float64(ip.coords[1]))
 			gc.FillStroke()
 			gc.MoveTo(float64(ip.coords[0]), float64(ip.coords[1]))
@@ -86,6 +68,8 @@ func main() {
 // and translate it to a point on the image.
 // The origin point should be in the middle of the image.
 func translateCoords(p point, rect image.Rectangle) point {
+	p.coords[0] *= stepLength
+	p.coords[1] *= stepLength
 	imgPoint := newPoint(p.dim)
 	imgPoint.coords[0] = p.coords[0] + (rect.Dx())/2
 	imgPoint.coords[1] = p.coords[1] + (rect.Dy())/2
